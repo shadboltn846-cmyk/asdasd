@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          zip_file="$GITHUB_WORKSPACE/CARROT_GHOST_BRAIN_V6_GITHUB.zip"
+          zip_file="$GITHUB_WORKSPACE/CARROT_GHOST_BRAIN_V6_GITHUB (4).zip"
 
           if [[ ! -f "$zip_file" ]]; then
             echo "::error::CARROT V6 ZIP not found in repository root"
