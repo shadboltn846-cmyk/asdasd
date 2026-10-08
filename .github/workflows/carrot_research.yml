@@ -1,0 +1,113 @@
+
+name: CARROT V6 Ghost Brain Autonomous Research
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '27 9 * * 1,3,5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: carrot-v6-research-main
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Find and extract CARROT V6
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip_file="$GITHUB_WORKSPACE/CARROT_GHOST_BRAIN_V6_GITHUB.zip"
+
+          if [[ ! -f "$zip_file" ]]; then
+            echo "::error::CARROT V6 ZIP not found in repository root"
+            ls -la "$GITHUB_WORKSPACE"
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/carrot_v6"
+          python -m zipfile -e "$zip_file" "$RUNNER_TEMP/carrot_v6"
+
+          root_file="$(find "$RUNNER_TEMP/carrot_v6" -name run_v6.py -print -quit)"
+          if [[ -z "$root_file" ]]; then
+            echo "::error::Cannot find run_v6.py in the ZIP"
+            exit 1
+          fi
+
+          root="$(dirname "$root_file")"
+          echo "CARROT_V6_ROOT=$root" >> "$GITHUB_ENV"
+          echo "Found CARROT V6 at $root"
+
+      - name: Restore previous AI research memory
+        uses: actions/cache/restore@v5
+        with:
+          path: .carrot-v6-state
+          key: carrot-v6-memory-${{ github.run_id }}
+          restore-keys: |
+            carrot-v6-memory-
+
+      - name: Install Python dependencies
+        run: python -m pip install -r "$CARROT_V6_ROOT/requirements.txt"
+
+      - name: Test CARROT research protections
+        run: |
+          cd "$CARROT_V6_ROOT"
+          OPENBLAS_NUM_THREADS=1 python tests/test_brain.py
+          OPENBLAS_NUM_THREADS=1 python tests/test_v6.py
+
+      - name: Run Ghost Brain V6
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.carrot-v6-state"
+          mkdir -p "$GITHUB_WORKSPACE/carrot-v6-results"
+
+          cd "$CARROT_V6_ROOT"
+          OPENBLAS_NUM_THREADS=1 python -u run_v6.py \
+            --state "$GITHUB_WORKSPACE/.carrot-v6-state/ghost_memory.json" \
+            --output "$GITHUB_WORKSPACE/carrot-v6-results" \
+            --cost 3
+
+      - name: Research new market patterns
+        run: |
+          cd "$CARROT_V6_ROOT"
+          OPENBLAS_NUM_THREADS=1 python -u research_loop_v6.py \
+            --state-dir "$GITHUB_WORKSPACE/.carrot-v6-state" \
+            --output "$GITHUB_WORKSPACE/carrot-v6-results" \
+            --cost 3
+
+      - name: Back up AI research memory
+        if: success()
+        run: |
+          cp "$GITHUB_WORKSPACE/.carrot-v6-state/ghost_memory.json" \
+             "$GITHUB_WORKSPACE/carrot-v6-results/V6_GHOST_MEMORY_BACKUP.json"
+          cp "$GITHUB_WORKSPACE/.carrot-v6-state/research_history.json" \
+             "$GITHUB_WORKSPACE/carrot-v6-results/V6_RESEARCH_HISTORY_BACKUP.json"
+
+      - name: Save AI memory for next run
+        if: success()
+        uses: actions/cache/save@v5
+        with:
+          path: .carrot-v6-state
+          key: carrot-v6-memory-${{ github.run_id }}
+
+      - name: Upload research reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: carrot-v6-research-${{ github.run_number }}
+          path: carrot-v6-results/
+          if-no-files-found: warn
+          retention-days: 30
